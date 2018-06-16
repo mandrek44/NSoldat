@@ -19,7 +19,7 @@ namespace NSoldat.Lib
         public void Connect(string address, int port, string adminPassword)
         {
             _tcpClient?.Close();
-            _tcpClient = new TcpClient("pila.fp.lan", 23073);
+            _tcpClient = new TcpClient("pila.fp.lan", port);
 
             var networkStream = _tcpClient.GetStream();
 
@@ -46,7 +46,7 @@ namespace NSoldat.Lib
         public RefreshPacket Refresh()
         {
             AssertConnected();
-            var stream = OutboundStream;
+            var stream = Stream.Synchronized(OutboundStream);
 
             stream.WriteLine("REFRESH");
 
@@ -76,6 +76,16 @@ namespace NSoldat.Lib
             var refresh = Refresh();
 
             return SingleEventParser.Parse(input, refresh);
+        }
+
+        public void SendRaw(string command)
+        {
+            OutboundStream.WriteLine(command);
+        }
+
+        public string ReadRaw()
+        {
+            return OutboundStream.ReadLine();
         }
     }
 }
