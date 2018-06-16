@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -27,7 +28,9 @@ namespace NSoldat.MultiServerClient
     {
         public MultiServerSettings.ServerSettings Settings { get; private set; }
         public SoldatClient Client { get; private set; }
-        
+
+        private ConcurrentQueue<string> _commandsQueue;
+
         public static SoldatConnnection Initilize(MultiServerSettings.ServerSettings settings, SoldatClient client)
         {
             var connection = new SoldatConnnection()
@@ -45,7 +48,7 @@ namespace NSoldat.MultiServerClient
         {
             while (true)
             {
-                Log(Client.ReadRaw());
+                Log(await Client.ReadLine());
                 await Task.Delay(100);
             }
         }
@@ -69,13 +72,13 @@ namespace NSoldat.MultiServerClient
             builder.Build().Bind(settings);
 
             var soldatConnnections = settings.Servers.Select(
-                serverSettings =>
-                {
-                    var client = new SoldatClient(new PacketParser());
-                    client.Connect(serverSettings.Address, serverSettings.Port, serverSettings.Password);
+                    serverSettings =>
+                    {
+                        var client = new SoldatClient(new PacketParser());
+                        client.Connect(serverSettings.Address, serverSettings.Port, serverSettings.Password);
 
-                    return SoldatConnnection.Initilize(serverSettings, client);
-                })
+                        return SoldatConnnection.Initilize(serverSettings, client);
+                    })
                 .ToArray();
             
             while (true)
@@ -86,12 +89,22 @@ namespace NSoldat.MultiServerClient
                     break;
                 }
 
-                foreach (var soldatConnnection in soldatConnnections)
+                if (command == "swap")
                 {
-                    soldatConnnection.Client.SendRaw(command);
-                }                
+                    var refreshPacket = soldatConnnections.First().Client.Refresh().Result;
+                    foreach (var soldatConnnection in soldatConnnections)
+                    {
+                        soldatConnnection.Client.SwapTeams();
+                    }
+                }
+                else
+                {
+                    foreach (var soldatConnnection in soldatConnnections)
+                    {
+                        soldatConnnection.Client.SendRaw(command);
+                    }
+                }
             }
-
         }
     }
 }

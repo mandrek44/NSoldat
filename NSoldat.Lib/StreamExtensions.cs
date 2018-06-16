@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace NSoldat.Lib
 {
@@ -24,19 +26,20 @@ namespace NSoldat.Lib
             return message;
         }
 
-        public static string ReadLine(this Stream stream)
+        public static async Task<string> ReadLine(this Stream stream)
         {
             var sb = new StringBuilder();
+            byte[] buffer = new byte[1];
 
             while (true)
-            {
-                var readByte = stream.ReadByte();
-                if (readByte == -1)
+            {   
+                var count = await stream.ReadAsync(buffer, 0, 1);
+                if (count != 1)
                 {
                     return sb.ToString();
                 }
 
-                var readString = Encoding.ASCII.GetString(new[] { (byte)readByte });
+                var readString = Encoding.ASCII.GetString(new[] { (byte)buffer[0] });
                 sb.Append(readString);
 
                 if (readString == "\n")
@@ -46,11 +49,11 @@ namespace NSoldat.Lib
             }
         }
 
-        public static bool ReadUntil(this Stream stream, string textPresent)
+        public static async Task<bool> ReadUntil(this Stream stream, string textPresent)
         {
             for (int i = 0; i < 10; i++)
             {
-                if (stream.ReadLine().Echo() == textPresent)
+                if ((await stream.ReadLine()).Echo() == textPresent)
                     return true;
             }
 

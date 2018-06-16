@@ -1,20 +1,36 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NSoldat.Lib
 {
+    public enum SoldatTeam
+    {
+        Alpha = 1,
+        Bravo = 2,
+        Charlie = 3,
+        Delta = 4,
+        NoTeam = 255
+    }
+
     public class SoldatClient
     {
         private TcpClient _tcpClient;
         private readonly IPacketParser _packetParser;
+        private readonly ConcurrentQueue<Action<Stream>> _commandsQueue = new ConcurrentQueue<Action<Stream>>();
+        private readonly ConcurrentQueue<string> _readLinesQueue = new ConcurrentQueue<string>();
 
         public SoldatClient(IPacketParser packetParser)
         {
             _packetParser = packetParser;
         }
 
-        private Stream OutboundStream => _tcpClient.GetStream();
+        public event Action<string> ServerLineReceived;
 
         public void Connect(string address, int port, string adminPassword)
         {
@@ -23,16 +39,42 @@ namespace NSoldat.Lib
 
             var networkStream = _tcpClient.GetStream();
 
-            networkStream.ReadLine().Echo();
+            networkStream.ReadLine().Result.Echo();
 
             networkStream.WriteLine(adminPassword);
 
-            networkStream.ReadLine().Echo();
-            networkStream.ReadLine().Echo();
-            networkStream.ReadLine().Echo();
+            networkStream.ReadLine().Result.Echo();
+            networkStream.ReadLine().Result.Echo();
+            networkStream.ReadLine().Result.Echo();
 
             networkStream.WriteLine("INFO");
-            networkStream.ReadLine().Echo();
+            networkStream.ReadLine().Result.Echo();
+
+            //_tcpClient.GetStream().ReadTimeout = 1;
+
+            Task.Run(() => ClientLoop());
+        }
+
+        private void ClientLoop()
+        {
+            var stream = _tcpClient.GetStream();
+            var lineCompletion = new TaskCompletionSource<RefreshPacket>();
+
+            while (true)
+            {
+                if (stream.DataAvailable)
+                {
+                    _readLinesQueue.Enqueue(stream.ReadLine().Result);
+                }
+                else if (_commandsQueue.TryDequeue(out var command))
+                {
+                    command(stream);
+                }
+                else
+                {
+                    Thread.Sleep(50);
+                }
+            }
         }
 
         private void AssertConnected()
@@ -43,49 +85,121 @@ namespace NSoldat.Lib
             }
         }
 
-        public RefreshPacket Refresh()
+        public async Task<RefreshPacket> Refresh()
         {
-            AssertConnected();
-            var stream = Stream.Synchronized(OutboundStream);
+            var tcs = new TaskCompletionSource<RefreshPacket>();
 
-            stream.WriteLine("REFRESH");
-
-            if (!stream.ReadUntil("REFRESH\r\n"))
+            _commandsQueue.Enqueue(stream =>
             {
-                System.Console.WriteLine("Something went wrong");
-                return null;
-            }
+                stream.WriteLine("REFRESH");
 
-            var refreshPacketLength = 1188;
-            var packet = new byte[refreshPacketLength];
-            var read = stream.Read(packet, 0, refreshPacketLength);
-            if (read != refreshPacketLength)
-            {
-                System.Console.WriteLine("Not everything read");
-            }
+                if (!stream.ReadUntil("REFRESH\r\n").Result)
+                {
+                    System.Console.WriteLine("Something went wrong");
+                    tcs.SetResult(null);
+                    return;
+                }
 
-            var refreshPacket = _packetParser.ParseRefreshPacket(packet, 0);
+                var refreshPacketLength = 1188;
+                var packet = new byte[refreshPacketLength];
+                var read = stream.Read(packet, 0, refreshPacketLength);
+                if (read != refreshPacketLength)
+                {
+                    System.Console.WriteLine("Not everything read");
+                }
 
-            return refreshPacket;
+                var refreshPacket = _packetParser.ParseRefreshPacket(packet, 0);
+                tcs.SetResult(refreshPacket);
+
+            });
+
+            return await tcs.Task;
         }
 
-        public ServerEvent ReadNextEvent()
+        public async Task SwapTeams()
         {
             AssertConnected();
-            var input = OutboundStream.ReadLine().Echo();
-            var refresh = Refresh();
+
+            const int noTeam = 0b11111111;
+
+            var refreshPacket = await Refresh();
+            if (refreshPacket == null)
+            {
+                return;
+            }
+
+            for (int playerIndex = 0; playerIndex < refreshPacket.Team.Length; ++playerIndex)
+            {
+                var team = (SoldatTeam)refreshPacket.Team[playerIndex];
+                if (team == SoldatTeam.NoTeam)
+                {
+                    continue;
+                }
+
+                var playerNumber = refreshPacket.Number[playerIndex];
+                if (team != SoldatTeam.Alpha)
+                {
+                    SetTeam(playerNumber, (int)SoldatTeam.Alpha);
+                }
+                else
+                {
+                    SetTeam(playerNumber, (int)SoldatTeam.Bravo);
+                }
+            }
+        }
+
+        public void SetTeam(int playerNumber, int teamNumber)
+        {
+            AssertConnected();
+
+            _commandsQueue.Enqueue(stream => stream.WriteLine($"/setteam{teamNumber} {playerNumber}"));
+        }
+
+        public async Task SetTeam(string playerName, SoldatTeam team)
+        {
+            AssertConnected();
+
+            var refreshPacket = await Refresh();
+
+            _commandsQueue.Enqueue(stream =>
+            {
+                var playerNumber = refreshPacket.Number[refreshPacket.PlayerName.ToList().IndexOf(playerName)];
+                var teamNumber = (int)team;
+                stream.WriteLine($"/setteam{teamNumber} {playerNumber}");
+            });
+        }
+
+        public async Task<ServerEvent> ReadNextEvent()
+        {
+            AssertConnected();
+
+            var input = await ReadLine();
+            var refresh = await Refresh();
 
             return SingleEventParser.Parse(input, refresh);
         }
 
         public void SendRaw(string command)
         {
-            OutboundStream.WriteLine(command);
+            _commandsQueue.Enqueue(stream => stream.WriteLine(command));
         }
 
-        public string ReadRaw()
+        public async Task<string> ReadLine()
         {
-            return OutboundStream.ReadLine();
+            return await Task.Run(async () =>
+            {
+                while (true)
+                {
+                    if (_readLinesQueue.TryDequeue(out var result))
+                        return result;
+                    await Task.Delay(100);
+                }
+            });
+        }
+
+        protected virtual void OnServerLineReceived(string line)
+        {
+            ServerLineReceived?.Invoke(line);
         }
     }
 }
