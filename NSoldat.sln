@@ -9,7 +9,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NSoldat.Tests", "NSoldat.Te
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NSoldat.StatsHarvester", "NSoldat.StatsHarvester\NSoldat.StatsHarvester.csproj", "{C4679557-FA29-478B-AC3B-C7D8E290D70F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NSoldat.MultiServerClient", "NSoldat.MultiServerClient\NSoldat.MultiServerClient.csproj", "{A00F1EF9-67DF-447F-8A33-2F2ED0C00E52}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NSoldat.MultiServerClient", "NSoldat.MultiServerClient\NSoldat.MultiServerClient.csproj", "{A00F1EF9-67DF-447F-8A33-2F2ED0C00E52}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{93602C03-DDEB-4EDE-B172-43B8234BD5C6}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		LICENSE = LICENSE
+		Makefile = Makefile
+		Readme.md = Readme.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

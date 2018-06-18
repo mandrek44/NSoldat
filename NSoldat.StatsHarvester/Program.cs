@@ -14,7 +14,7 @@ namespace NSoldat.StatsHarvester
             var builder = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: true)
-                .AddEnvironmentVariables(prefix:"soldat_")
+                .AddJsonFile("appsettings.local.json", optional: true)
                 .AddCommandLine(args);
 
             var configurationRoot = builder.Build();
@@ -28,7 +28,7 @@ namespace NSoldat.StatsHarvester
 
             while (true)
             {
-                var serverEvent = soldatClient.ReadNextEvent();
+                ServerEvent serverEvent = soldatClient.ReadNextEvent().Result;
                 Console.WriteLine(serverEvent);
 
                 var jsonServerEvent = JsonConvert.SerializeObject(serverEvent);

@@ -9,33 +9,37 @@ using System.Threading.Tasks;
 
 namespace NSoldat.Lib
 {
-    public enum SoldatTeam
-    {
-        Alpha = 1,
-        Bravo = 2,
-        Charlie = 3,
-        Delta = 4,
-        NoTeam = 255
-    }
-
-    public class SoldatClient
+    public class SoldatClient : ISoldatClientCommands
     {
         private TcpClient _tcpClient;
         private readonly IPacketParser _packetParser;
         private readonly ConcurrentQueue<Action<Stream>> _commandsQueue = new ConcurrentQueue<Action<Stream>>();
         private readonly ConcurrentQueue<string> _readLinesQueue = new ConcurrentQueue<string>();
 
+        public string Address {  get; private set; }
+
+        public int Port { get; private set; }
+
         public SoldatClient(IPacketParser packetParser)
         {
             _packetParser = packetParser;
         }
 
-        public event Action<string> ServerLineReceived;
+        public static SoldatClient CreateConnected(string address, int port, string adminPassword, IPacketParser parser = null)
+        {
+            var soldatClient = new SoldatClient(parser ?? new PacketParser());
+            soldatClient.Connect(address, port, adminPassword);
+
+            return soldatClient;
+        }
 
         public void Connect(string address, int port, string adminPassword)
         {
+            Address = address;
+            Port = port;
+
             _tcpClient?.Close();
-            _tcpClient = new TcpClient("pila.fp.lan", port);
+            _tcpClient = new TcpClient(address, port);
 
             var networkStream = _tcpClient.GetStream();
 
@@ -49,16 +53,13 @@ namespace NSoldat.Lib
 
             networkStream.WriteLine("INFO");
             networkStream.ReadLine().Result.Echo();
-
-            //_tcpClient.GetStream().ReadTimeout = 1;
-
+            
             Task.Run(() => ClientLoop());
         }
 
         private void ClientLoop()
         {
             var stream = _tcpClient.GetStream();
-            var lineCompletion = new TaskCompletionSource<RefreshPacket>();
 
             while (true)
             {
@@ -169,6 +170,14 @@ namespace NSoldat.Lib
             });
         }
 
+        public void SetMap(string mapName) => 
+            _commandsQueue.Enqueue(stream => stream.WriteLine($"/map {mapName}"));
+        
+        public void Restart() => _commandsQueue.Enqueue(stream => stream.WriteLine("/restart"));
+
+        public void Say(string what) =>
+            _commandsQueue.Enqueue(stream => stream.WriteLine($"/say {what}"));
+
         public async Task<ServerEvent> ReadNextEvent()
         {
             AssertConnected();
@@ -195,11 +204,6 @@ namespace NSoldat.Lib
                     await Task.Delay(100);
                 }
             });
-        }
-
-        protected virtual void OnServerLineReceived(string line)
-        {
-            ServerLineReceived?.Invoke(line);
         }
     }
 }

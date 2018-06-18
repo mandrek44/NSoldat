@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace NSoldat.Lib
@@ -10,6 +11,8 @@ namespace NSoldat.Lib
         public EventType EventType { get; }
 
         public Dictionary<string, string> Props { get; }
+
+        public DateTime Timestamp { get; } = DateTime.UtcNow;
 
         public string this[string groupname] => Props[groupname];
 
@@ -28,7 +31,7 @@ namespace NSoldat.Lib
 
         public override string ToString()
         {
-            return $"{nameof(EventType)}: {EventType}, {nameof(Props)}:\r\n {string.Join("\r\n",Props.Select(k => $"\t{k.Key} => {k.Value}"))}";
+            return $"{nameof(Timestamp)}: {Timestamp}, {nameof(EventType)}: {EventType}, {nameof(Props)}:\r\n {string.Join("\r\n",Props.Select(k => $"\t{k.Key} => {k.Value}"))}";
         }
     }
 }

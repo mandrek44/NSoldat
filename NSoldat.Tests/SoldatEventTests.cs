@@ -123,7 +123,15 @@ namespace NSoldat.Tests
                 "Next map: ctf_Barbwire",
                 EventType.NextMap,
                 ("map", "ctf_Barbwire"));
-        
+
+
+        [Fact]
+        public void TestTimeLeft() =>
+            Test(
+                "Time Left: 1 minutes",
+                EventType.TimeLeft,
+                ("timeleft", "1 minutes"));
+
         private void Test(string input, EventType expectedType, params (string, string)[] props)
         {
             // given

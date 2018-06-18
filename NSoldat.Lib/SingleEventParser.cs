@@ -61,6 +61,12 @@ namespace NSoldat.Lib
             @"^\/(?<command>\w+?)\((?<ip>[\d\.]+)\[(?<name>.+?)\]\)",
             EventType.CommandRequest);
 
+
+        private static ServerEvent ParseTimeLeft(RefreshPacket refreshPacket, string input) => ParseByNamedRegex(
+            refreshPacket, input,
+            @"^Time Left: (?<timeleft>.+)",
+            EventType.TimeLeft);
+
         private static ServerEvent ParseByNamedRegex(RefreshPacket refreshPacket, string input, string regexWithNamedGroups,
             EventType eventType)
         {
@@ -96,7 +102,8 @@ namespace NSoldat.Lib
                 ParsePlayerReturnsFlag,
                 ParsePlayerScoresForTeam,
                 ParseNextMap,
-                ParseCommandRequest
+                ParseTimeLeft,
+                ParseCommandRequest,
             };
 
             foreach (var handler in handlers)
